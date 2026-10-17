@@ -1,0 +1,8 @@
+dexie.js
+*.exe
+game_mount
+extensions
+userdata
+neutralino.js
+*.log
+.tmp

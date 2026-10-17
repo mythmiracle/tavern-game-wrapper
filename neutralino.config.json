@@ -1,0 +1,48 @@
+{
+  "applicationId": "wayward.tavern.wrapper",
+  "version": "0.9.0",
+  "defaultMode": "window",
+  "port": 49284,
+  "documentRoot": "/",
+  "url": "/launcher.html",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "tokenSecurity": "none",
+  "exportAuthInfo": true,
+  "enableResourcesPackaging": false,
+  "nativeAllowList": [
+    "app.*",
+    "os.*",
+    "events.*",
+    "filesystem.*",
+    "window.*",
+    "storage.*",
+    "extensions.*"
+  ],
+  "modes": {
+    "window": {
+      "title": "Wayward — a medieval tavern sandbox, free in your browser",
+      "width": 1440,
+      "height": 900,
+      "resizable": true,
+      "center": true,
+      "exitProcessOnClose": false,
+      "injectGlobals": true,
+      "injectClientLibrary": true,
+      "injectScript": "/neutralino-storage-bridge.js",
+      "enableInspector": true,
+      "openInspectorOnStartup": false,
+      "icon": "/icon.png"
+    }
+  },
+  "cli": {
+    "binaryName": "wayward-wrapper",
+    "resourcesPath": "/",
+    "extensionsPath": "/extensions/",
+    "clientLibrary": "/neutralino.js",
+    "binaryVersion": "6.10.0",
+    "clientVersion": "6.10.0"
+  },
+  "enableExtensions": true,
+  "extensions": []
+}
