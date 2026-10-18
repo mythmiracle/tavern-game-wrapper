@@ -1,6 +1,6 @@
 {
   "applicationId": "wayward.tavern.wrapper",
-  "version": "0.9.0",
+  "version": "0.12.0",
   "defaultMode": "window",
   "port": 49284,
   "documentRoot": "/",

@@ -22,7 +22,7 @@
 (function initNeutralinoStorageBridgeV9(global) {
   'use strict';
 
-  const BRIDGE_VERSION = 14;
+  const BRIDGE_VERSION = 15;
   const WINDOW_NAME_PREFIX = '__NEU_STORAGE_CARRIER_V6__:';
   const DEXIE_DB_NAME = 'WaywardTavernStorageDB';
   const SQLITE_EXTENSION_ID = 'js.neutralino.sqlite';
@@ -2298,6 +2298,15 @@
 
       ws.addEventListener('close', () => {
         isReady = false;
+        if (pending.size > 0) {
+          for (const [reqId, entry] of Array.from(pending.entries())) {
+            pending.delete(reqId);
+            if (entry.timer) clearTimeout(entry.timer);
+            try {
+              entry.reject(new Error('내부 통신 연결이 일시적으로 닫혔습니다.'));
+            } catch (_) {}
+          }
+        }
         if (!global.__storageBridge || !global.__storageBridge.isClosing) {
           setTimeout(() => {
             try {
@@ -2453,6 +2462,9 @@
         },
         writeFile(path, data) {
           return sendMessage('filesystem.writeFile', { path, data }, 30000);
+        },
+        appendFile(path, data) {
+          return sendMessage('filesystem.appendFile', { path, data }, 30000);
         },
         getStats(path) {
           return sendMessage('filesystem.getStats', { path }, 4000);
@@ -2825,12 +2837,26 @@
       const subEl = document.getElementById('__neu-saving-sub');
       const barEl = document.getElementById('__neu-saving-progress-bar');
 
+      const hasNumericProgress =
+        typeof options.progress === 'number' && Number.isFinite(options.progress);
+      const clampedProgress = hasNumericProgress
+        ? Math.max(4, Math.min(100, Math.round(options.progress)))
+        : null;
+
       if (badgeEl) {
         badgeEl.textContent = badgeText;
         if (mode === 'success') {
           badgeEl.style.background = 'rgba(16, 185, 129, 0.18)';
           badgeEl.style.color = '#6ee7b7';
           badgeEl.style.borderColor = 'rgba(52, 211, 153, 0.45)';
+        } else if (mode === 'warning') {
+          badgeEl.style.background = 'rgba(245, 158, 11, 0.18)';
+          badgeEl.style.color = '#fcd34d';
+          badgeEl.style.borderColor = 'rgba(251, 191, 36, 0.45)';
+        } else if (mode === 'error') {
+          badgeEl.style.background = 'rgba(244, 63, 94, 0.18)';
+          badgeEl.style.color = '#fda4af';
+          badgeEl.style.borderColor = 'rgba(251, 113, 133, 0.45)';
         } else {
           badgeEl.style.background = 'rgba(59, 130, 246, 0.16)';
           badgeEl.style.color = '#93c5fd';
@@ -2841,15 +2867,40 @@
         if (mode === 'success') {
           cardEl.style.borderColor = 'rgba(52, 211, 153, 0.55)';
           cardEl.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(16, 185, 129, 0.22)';
+        } else if (mode === 'warning') {
+          cardEl.style.borderColor = 'rgba(251, 191, 36, 0.5)';
+          cardEl.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(245, 158, 11, 0.2)';
+        } else if (mode === 'error') {
+          cardEl.style.borderColor = 'rgba(251, 113, 133, 0.55)';
+          cardEl.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(244, 63, 94, 0.22)';
         } else {
           cardEl.style.borderColor = 'rgba(59, 130, 246, 0.45)';
           cardEl.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(37, 99, 235, 0.18)';
         }
       }
       if (spinnerEl && checkEl) {
-        if (mode === 'success') {
+        if (mode === 'success' || mode === 'warning' || mode === 'error') {
           spinnerEl.style.display = 'none';
           checkEl.style.display = 'flex';
+          if (mode === 'warning') {
+            checkEl.textContent = '!';
+            checkEl.style.background = 'rgba(245, 158, 11, 0.18)';
+            checkEl.style.borderColor = 'rgba(251, 191, 36, 0.65)';
+            checkEl.style.color = '#fbbf24';
+            checkEl.style.boxShadow = '0 0 24px rgba(245, 158, 11, 0.28)';
+          } else if (mode === 'error') {
+            checkEl.textContent = '✕';
+            checkEl.style.background = 'rgba(244, 63, 94, 0.18)';
+            checkEl.style.borderColor = 'rgba(251, 113, 133, 0.65)';
+            checkEl.style.color = '#fb7185';
+            checkEl.style.boxShadow = '0 0 24px rgba(244, 63, 94, 0.28)';
+          } else {
+            checkEl.textContent = '✓';
+            checkEl.style.background = 'rgba(16, 185, 129, 0.18)';
+            checkEl.style.borderColor = 'rgba(52, 211, 153, 0.65)';
+            checkEl.style.color = '#34d399';
+            checkEl.style.boxShadow = '0 0 24px rgba(16, 185, 129, 0.3)';
+          }
         } else {
           spinnerEl.style.display = 'block';
           checkEl.style.display = 'none';
@@ -2859,8 +2910,25 @@
         if (mode === 'success') {
           barEl.style.width = '100%';
           barEl.style.animation = 'none';
+          barEl.style.transition = 'width 0.2s ease';
           barEl.style.background = '#10b981';
+        } else if (mode === 'warning') {
+          barEl.style.width = '100%';
+          barEl.style.animation = 'none';
+          barEl.style.transition = 'width 0.2s ease';
+          barEl.style.background = '#f59e0b';
+        } else if (mode === 'error') {
+          barEl.style.width = '100%';
+          barEl.style.animation = 'none';
+          barEl.style.transition = 'width 0.2s ease';
+          barEl.style.background = '#f43f5e';
+        } else if (clampedProgress !== null) {
+          barEl.style.animation = 'none';
+          barEl.style.transition = 'width 0.18s ease';
+          barEl.style.width = `${clampedProgress}%`;
+          barEl.style.background = 'linear-gradient(90deg, #3b82f6, #60a5fa, #34d399)';
         } else {
+          barEl.style.transition = 'none';
           barEl.style.width = '45%';
           barEl.style.animation = '__neu_bar_slide 1.25s ease-in-out infinite';
           barEl.style.background = 'linear-gradient(90deg, #3b82f6, #60a5fa, #34d399)';
@@ -2870,10 +2938,58 @@
         titleEl.textContent = titleText || '데이터 저장 중...';
       }
       if (subEl) {
+        subEl.style.whiteSpace = 'pre-line';
         subEl.textContent =
           subText || '변경된 세이브 데이터를 안전하게 저장하고 있습니다. 잠시만 기다려 주세요.';
       }
       return backdrop;
+    }
+
+    showActionToast(message, isError = false) {
+      if (typeof window === 'undefined' || typeof document === 'undefined') return;
+      if (typeof window.__onLauncherShowToast === 'function') {
+        try {
+          window.__onLauncherShowToast(message, isError);
+          return;
+        } catch (_) {}
+      }
+      try {
+        let toastEl = document.getElementById('__neu-action-floating-toast');
+        if (!toastEl) {
+          toastEl = document.createElement('div');
+          toastEl.id = '__neu-action-floating-toast';
+          (document.body || document.documentElement).appendChild(toastEl);
+        }
+        toastEl.style.cssText = [
+          'position:fixed',
+          'right:18px',
+          'bottom:18px',
+          'z-index:2147483646',
+          'max-width:440px',
+          'padding:12px 16px',
+          'border-radius:13px',
+          'font-family:"Inter",-apple-system,BlinkMacSystemFont,"Malgun Gothic","맑은 고딕",sans-serif',
+          'font-size:13px',
+          'font-weight:600',
+          'line-height:1.45',
+          'box-shadow:0 16px 38px rgba(0,0,0,0.75)',
+          'border:1px solid ' + (isError ? 'rgba(244,63,94,0.55)' : 'rgba(16,185,129,0.55)'),
+          'background:' + (isError ? 'rgba(69,10,20,0.95)' : 'rgba(6,46,34,0.95)'),
+          'color:' + (isError ? '#fecdd3' : '#a7f3d0'),
+          'pointer-events:auto',
+          'cursor:pointer',
+          'transition:opacity 0.25s ease',
+          'opacity:1',
+        ].join(';');
+        toastEl.textContent = (isError ? '⚠️ ' : '✅ ') + String(message || '');
+        toastEl.onclick = () => {
+          toastEl.style.opacity = '0';
+        };
+        if (this._actionToastTimer) clearTimeout(this._actionToastTimer);
+        this._actionToastTimer = setTimeout(() => {
+          if (toastEl) toastEl.style.opacity = '0';
+        }, 4000);
+      } catch (_) {}
     }
 
     async waitForBackdropPaint(extraMs = 60) {
@@ -4823,7 +4939,7 @@
           '})();',
           safeInlineBridgeSource,
           '\x3c/script\x3e',
-          '\x3cscript src="/neutralino-storage-bridge.js?v=14" onerror=""\x3e\x3c/script\x3e',
+          '\x3cscript src="/neutralino-storage-bridge.js?v=15" onerror=""\x3e\x3c/script\x3e',
           '\x3c!-- __NEU_STORAGE_BRIDGE_INJECTED_END__ --\x3e',
         ].join('\n');
 
@@ -4899,8 +5015,29 @@
         if (!selected) {
           return { cancelled: true };
         }
-        const cfg = await this.configureGameHtmlPath(selected);
-        return { cancelled: false, config: cfg };
+        const shownAt = Date.now();
+        this.showSavingBackdrop(
+          '게임 실행 파일 연결 중...',
+          `선택한 게임 파일(${basename(selected)})에 자동 세이브 보호 엔진을 연결하고 있습니다. 잠시만 기다려 주세요.`,
+          { mode: 'loading', badgeText: '게임 파일 준비 중' }
+        );
+        await this.waitForBackdropPaint(70);
+        try {
+          const cfg = await this.configureGameHtmlPath(selected);
+          const elapsed = Date.now() - shownAt;
+          if (elapsed < 420) {
+            await new Promise((r) => setTimeout(r, 420 - elapsed));
+          }
+          this.showSavingBackdrop(
+            '게임 실행 파일 연결 완료!',
+            `게임 파일(${basename(selected)})이 정상적으로 연결되었습니다.`,
+            { mode: 'success', badgeText: '연결 완료 ✓' }
+          );
+          await this.waitForBackdropPaint(320);
+          return { cancelled: false, config: cfg };
+        } finally {
+          this.hideSavingBackdrop(180);
+        }
       }
 
       throw new Error('파일 선택 창을 열 수 없습니다. 프로그램을 다시 실행해 주세요.');
@@ -5012,11 +5149,18 @@
             : null;
           if (selected) {
             selectedLabel = selected;
+            this.showSavingBackdrop(
+              '세이브 백업 파일 읽어오는 중...',
+              `선택한 백업 파일(${basename(selected)})의 데이터를 읽고 있습니다. 잠시만 기다려 주세요.`,
+              { mode: 'loading', badgeText: '백업 파일 읽는 중', progress: 20 }
+            );
+            await this.waitForBackdropPaint(70);
             rawText = await this.fs.readFile(selected);
           } else {
             return { cancelled: true };
           }
         } catch (_) {
+          this.hideSavingBackdrop(120);
           rawText = null;
         }
       }
@@ -5036,9 +5180,16 @@
               return;
             }
             try {
+              this.showSavingBackdrop(
+                '세이브 백업 파일 읽어오는 중...',
+                `선택한 백업 파일(${file.name})의 데이터를 읽고 있습니다. 잠시만 기다려 주세요.`,
+                { mode: 'loading', badgeText: '백업 파일 읽는 중', progress: 20 }
+              );
+              await this.waitForBackdropPaint(70);
               const text = await file.text();
               resolve({ name: file.name, text });
             } catch (err) {
+              this.hideSavingBackdrop(120);
               resolve({ error: err });
             }
           };
@@ -5063,6 +5214,7 @@
       }
 
       if (!rawText) {
+        this.hideSavingBackdrop(120);
         return { cancelled: true };
       }
 
@@ -5070,29 +5222,37 @@
     }
 
     async importRawBackupText(rawText, selectedLabel = 'backup.json') {
-      const cleanText = String(rawText).replace(/^\uFEFF/, '').trim();
-      let parsed;
-      try {
-        parsed = JSON.parse(cleanText);
-      } catch (_) {
-        throw new Error('선택한 파일이 올바른 세이브 백업 파일 형식이 아닙니다.');
-      }
-
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        throw new Error('올바른 세이브 백업 데이터가 아닙니다.');
-      }
-
       const shownAt = Date.now();
       this.showSavingBackdrop(
-        '세이브 백업 데이터 불러오는 중...',
-        '백업 파일의 세이브와 모드 설정을 불러와 저장하고 있습니다. 잠시만 기다려 주세요.',
-        { mode: 'loading', badgeText: '백업 복원 중' }
+        '세이브 백업 데이터 분석 중...',
+        `백업 파일(${basename(selectedLabel)})의 데이터 형식을 확인하고 있습니다. 잠시만 기다려 주세요.`,
+        { mode: 'loading', badgeText: '백업 데이터 검증 중', progress: 35 }
       );
       await this.waitForBackdropPaint(70);
 
       try {
+        const cleanText = String(rawText).replace(/^\uFEFF/, '').trim();
+        let parsed;
+        try {
+          parsed = JSON.parse(cleanText);
+        } catch (_) {
+          throw new Error('선택한 파일이 올바른 세이브 백업 파일 형식이 아닙니다.');
+        }
+
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('올바른 세이브 백업 데이터가 아닙니다.');
+        }
+
+        const entryList = Object.entries(parsed);
+        this.showSavingBackdrop(
+          `세이브 백업 데이터 불러오는 중... (총 ${entryList.length}개 항목)`,
+          '백업 파일의 세이브와 모드 설정을 저장소에 반영하고 있습니다. 잠시만 기다려 주세요.',
+          { mode: 'loading', badgeText: '백업 복원 중', progress: 65 }
+        );
+        await this.waitForBackdropPaint(70);
+
         const processed = {};
-        for (const [k, v] of Object.entries(parsed)) {
+        for (const [k, v] of entryList) {
           processed[k] = typeof v === 'string' ? v : JSON.stringify(v);
         }
 
@@ -5103,21 +5263,29 @@
         this.saveSnapshotToWindowName();
 
         const elapsed = Date.now() - shownAt;
-        if (elapsed < 450) {
-          await new Promise((r) => setTimeout(r, 450 - elapsed));
+        if (elapsed < 500) {
+          await new Promise((r) => setTimeout(r, 500 - elapsed));
         }
         this.showSavingBackdrop(
           '백업 데이터 적용 완료!',
-          '모든 세이브와 모드 설정이 안전하게 반영되었습니다.',
+          `총 ${entryList.length}개의 세이브와 모드 설정이 안전하게 반영되었습니다.`,
           { mode: 'success', badgeText: '복원 완료 ✓' }
         );
-        await this.waitForBackdropPaint(280);
+        await this.waitForBackdropPaint(420);
 
         return {
           cancelled: false,
           fileName: selectedLabel,
           stats: this.getStats(),
         };
+      } catch (err) {
+        this.showSavingBackdrop(
+          '백업 파일 불러오기 실패',
+          err && err.message ? err.message : '백업 파일을 불러오는 중 오류가 발생했습니다.',
+          { mode: 'error', badgeText: '불러오기 오류' }
+        );
+        await this.waitForBackdropPaint(750);
+        throw err;
       } finally {
         this.hideSavingBackdrop(180);
       }
@@ -5125,43 +5293,286 @@
 
     async exportBackupFileWithPicker() {
       ensureNeutralinoEnvironment();
-      const dumpStr = JSON.stringify(this.exportDump(), null, 2);
-      const defaultName = `wayward-save-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const startMs = Date.now();
 
-      if (
-        global.Neutralino &&
-        global.Neutralino.os &&
-        typeof global.Neutralino.os.showSaveDialog === 'function'
-      ) {
-        try {
-          const savePath = await global.Neutralino.os.showSaveDialog(
-            '세이브 백업 파일 저장 위치 선택',
-            {
-              defaultPath: defaultName,
-              filters: [{ name: '세이브 백업 파일', extensions: ['json'] }],
-            }
-          );
-          if (savePath) {
-            await this.fs.writeFile(savePath, dumpStr);
-            return { saved: true, path: savePath };
+      const formatByteLabel = (chars) => {
+        if (chars >= 1024 * 1024) {
+          return (chars / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+        if (chars >= 1024) {
+          return (chars / 1024).toFixed(1) + ' KB';
+        }
+        return chars + ' B';
+      };
+
+      this.showSavingBackdrop(
+        '세이브 백업 데이터 준비 중...',
+        '현재 진행 상황과 모드 설정을 백업 파일로 내보낼 준비를 하고 있습니다. 잠시만 기다려 주세요.',
+        { mode: 'loading', badgeText: '백업 데이터 준비 중', progress: 10 }
+      );
+      await this.waitForBackdropPaint(80);
+
+      try {
+        if (this.hasUnsavedChanges()) {
+          try {
+            await Promise.race([
+              this.flushDexie(),
+              new Promise((r) => setTimeout(r, 600)),
+            ]);
+          } catch (_) {}
+        }
+
+        const dumpObj = this.exportDump();
+        const entries = Object.entries(dumpObj);
+
+        if (entries.length === 0) {
+          const emptyElapsed = Date.now() - startMs;
+          if (emptyElapsed < 400) {
+            await new Promise((r) => setTimeout(r, 400 - emptyElapsed));
           }
-          return { saved: false };
-        } catch (_) {}
-      }
+          this.showSavingBackdrop(
+            '보관된 세이브 데이터가 없습니다',
+            '아직 저장된 게임 진행 데이터나 모드 설정이 없어 내보낼 백업 항목이 없습니다.',
+            { mode: 'warning', badgeText: '내보낼 데이터 없음' }
+          );
+          await this.waitForBackdropPaint(850);
+          this.showActionToast('현재 보관 중인 세이브 데이터가 없습니다.', true);
+          return { saved: false, empty: true };
+        }
 
-      if (typeof document !== 'undefined') {
-        const blob = new Blob([dumpStr], { type: 'application/json;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = defaultName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        return { saved: true, path: defaultName };
+        this.showSavingBackdrop(
+          `세이브 백업 데이터 추출 중... (총 ${entries.length}개 항목)`,
+          '게임 진행 세이브와 모드 설정 데이터를 백업 파일 형식으로 변환하고 있습니다. 잠시만 기다려 주세요.',
+          { mode: 'loading', badgeText: '백업 데이터 추출 중', progress: 18 }
+        );
+        await this.waitForBackdropPaint(60);
+
+        const jsonParts = ['{\n'];
+        let totalChars = 2;
+        let lastYieldMs = Date.now();
+
+        for (let i = 0; i < entries.length; i++) {
+          const [k, v] = entries[i];
+          const line = `  ${JSON.stringify(k)}: ${JSON.stringify(v)}${
+            i < entries.length - 1 ? ',' : ''
+          }\n`;
+          jsonParts.push(line);
+          totalChars += line.length;
+
+          if (Date.now() - lastYieldMs > 30) {
+            const pct = Math.min(48, 18 + Math.round(((i + 1) / entries.length) * 30));
+            this.showSavingBackdrop(
+              `세이브 백업 데이터 추출 중... (${pct}%)`,
+              `총 ${entries.length}개 항목 중 ${i + 1}개 항목을 백업 데이터로 변환하고 있습니다...`,
+              { mode: 'loading', badgeText: '백업 데이터 추출 중', progress: pct }
+            );
+            await this.waitForBackdropPaint(16);
+            lastYieldMs = Date.now();
+          }
+        }
+        jsonParts.push('}');
+        totalChars += 1;
+
+        const sizeLabel = formatByteLabel(totalChars);
+        const defaultName = `wayward-save-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+        const prepElapsed = Date.now() - startMs;
+        if (prepElapsed < 380) {
+          await new Promise((r) => setTimeout(r, 380 - prepElapsed));
+        }
+
+        const canUseNativeSaveDialog = Boolean(
+          global.Neutralino &&
+            global.Neutralino.os &&
+            typeof global.Neutralino.os.showSaveDialog === 'function' &&
+            (this.config.customFs || global.NL_TOKEN || global.NL_CONNECT_TOKEN || isLocalNeutralinoUrl())
+        );
+
+        if (canUseNativeSaveDialog) {
+          let dialogSupported = true;
+          let rawSavePath = '';
+          try {
+            this.showSavingBackdrop(
+              '백업 파일 저장 위치 선택 대기 중...',
+              `백업 데이터(${sizeLabel}, 총 ${entries.length}개 항목) 준비가 완료되었습니다. 열린 파일 저장 창에서 보관할 위치를 선택해 주세요.`,
+              { mode: 'loading', badgeText: '저장 위치 선택 중', progress: 50 }
+            );
+            await this.waitForBackdropPaint(50);
+
+            const saveDialogRes = await global.Neutralino.os.showSaveDialog(
+              '세이브 백업 파일 저장 위치 선택',
+              {
+                defaultPath: defaultName,
+                filters: [{ name: '세이브 백업 파일 (*.json)', extensions: ['json'] }],
+              }
+            );
+            rawSavePath =
+              typeof saveDialogRes === 'string'
+                ? saveDialogRes
+                : saveDialogRes && typeof saveDialogRes.selectedEntry === 'string'
+                ? saveDialogRes.selectedEntry
+                : saveDialogRes && typeof saveDialogRes.returnValue === 'string'
+                ? saveDialogRes.returnValue
+                : '';
+          } catch (_) {
+            dialogSupported = false;
+          }
+
+          if (dialogSupported) {
+            let savePath = String(rawSavePath || '').trim();
+            if (!savePath) {
+              this.showSavingBackdrop(
+                '백업 저장이 취소되었습니다',
+                '파일 저장 위치를 선택하지 않아 세이브 백업 내보내기를 취소했습니다.',
+                { mode: 'warning', badgeText: '백업 저장 취소됨' }
+              );
+              await this.waitForBackdropPaint(500);
+              return { saved: false, cancelled: true };
+            }
+
+            if (!/\.[a-z0-9]+$/i.test(savePath)) {
+              savePath += '.json';
+            }
+
+            const fileNameOnly = basename(savePath);
+            const writeStartMs = Date.now();
+            this.showSavingBackdrop(
+              '세이브 백업 데이터를 내보내는 중... (55%)',
+              `선택한 위치에 세이브 백업 파일(${fileNameOnly} · ${sizeLabel})을 기록하고 있습니다. 잠시만 기다려 주세요.`,
+              { mode: 'loading', badgeText: '백업 데이터 내보내는 중', progress: 55 }
+            );
+            await this.waitForBackdropPaint(70);
+
+            const CHUNK_LIMIT = 1536 * 1024;
+            if (typeof this.fs.appendFile === 'function' && totalChars > CHUNK_LIMIT) {
+              const chunks = [];
+              let buf = '';
+              for (let i = 0; i < jsonParts.length; i++) {
+                const part = jsonParts[i];
+                if (buf.length + part.length <= CHUNK_LIMIT) {
+                  buf += part;
+                } else {
+                  if (buf.length > 0) {
+                    chunks.push(buf);
+                    buf = '';
+                  }
+                  if (part.length <= CHUNK_LIMIT) {
+                    buf = part;
+                  } else {
+                    for (let offset = 0; offset < part.length; offset += CHUNK_LIMIT) {
+                      chunks.push(part.slice(offset, offset + CHUNK_LIMIT));
+                    }
+                  }
+                }
+              }
+              if (buf.length > 0) {
+                chunks.push(buf);
+              }
+
+              let writtenChars = 0;
+              for (let cIdx = 0; cIdx < chunks.length; cIdx++) {
+                const chunkStr = chunks[cIdx];
+                if (cIdx === 0) {
+                  await this.fs.writeFile(savePath, chunkStr);
+                } else {
+                  await this.fs.appendFile(savePath, chunkStr);
+                }
+                writtenChars += chunkStr.length;
+                const pct = Math.min(98, 55 + Math.round((writtenChars / totalChars) * 43));
+                this.showSavingBackdrop(
+                  `세이브 백업 데이터를 내보내는 중... (${pct}%)`,
+                  `백업 파일(${fileNameOnly})을 디스크에 기록하고 있습니다... (${formatByteLabel(
+                    writtenChars
+                  )} / ${sizeLabel})`,
+                  { mode: 'loading', badgeText: '백업 데이터 내보내는 중', progress: pct }
+                );
+                await this.waitForBackdropPaint(16);
+              }
+            } else {
+              const fullDumpStr = jsonParts.join('');
+              await this.fs.writeFile(savePath, fullDumpStr);
+            }
+
+            const writeElapsed = Date.now() - writeStartMs;
+            if (writeElapsed < 480) {
+              await new Promise((r) => setTimeout(r, 480 - writeElapsed));
+            }
+
+            this.showSavingBackdrop(
+              '세이브 백업 저장 완료!',
+              `총 ${entries.length}개의 세이브 및 모드 설정(${sizeLabel})이 안전하게 저장되었습니다.\n저장 파일: ${fileNameOnly}`,
+              { mode: 'success', badgeText: '백업 저장 완료 ✓' }
+            );
+            await this.waitForBackdropPaint(750);
+            this.showActionToast(`세이브 백업 파일 저장 완료: ${savePath} (${sizeLabel})`, false);
+            return {
+              saved: true,
+              path: savePath,
+              byteLength: totalChars,
+              totalKeys: entries.length,
+            };
+          }
+        }
+
+        if (typeof document !== 'undefined') {
+          const dlStartMs = Date.now();
+          this.showSavingBackdrop(
+            '세이브 백업 데이터를 내보내는 중... (75%)',
+            `세이브 및 모드 백업 파일(${defaultName} · ${sizeLabel})을 생성하여 내보내고 있습니다. 잠시만 기다려 주세요.`,
+            { mode: 'loading', badgeText: '백업 데이터 내보내는 중', progress: 75 }
+          );
+          await this.waitForBackdropPaint(80);
+
+          const blob = new Blob(jsonParts, { type: 'application/json;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = defaultName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => {
+            try {
+              URL.revokeObjectURL(url);
+            } catch (_) {}
+          }, 5000);
+
+          const dlElapsed = Date.now() - dlStartMs;
+          if (dlElapsed < 500) {
+            await new Promise((r) => setTimeout(r, 500 - dlElapsed));
+          }
+
+          this.showSavingBackdrop(
+            '세이브 백업 저장 완료!',
+            `총 ${entries.length}개의 세이브 및 모드 설정(${sizeLabel})을 백업 파일(${defaultName})로 내보냈습니다.`,
+            { mode: 'success', badgeText: '백업 저장 완료 ✓' }
+          );
+          await this.waitForBackdropPaint(750);
+          this.showActionToast(`세이브 백업 파일 저장 완료: ${defaultName} (${sizeLabel})`, false);
+          return {
+            saved: true,
+            path: defaultName,
+            byteLength: totalChars,
+            totalKeys: entries.length,
+          };
+        }
+
+        return { saved: false };
+      } catch (err) {
+        this.showSavingBackdrop(
+          '세이브 백업 내보내기 실패',
+          err && err.message ? err.message : '세이브 백업 파일을 저장하는 중 오류가 발생했습니다.',
+          { mode: 'error', badgeText: '백업 내보내기 오류' }
+        );
+        await this.waitForBackdropPaint(850);
+        this.showActionToast(
+          `세이브 백업 내보내기 실패: ${err && err.message ? err.message : String(err)}`,
+          true
+        );
+        throw err;
+      } finally {
+        this.hideSavingBackdrop(200);
       }
-      return { saved: false };
     }
 
     async safeExitApplication() {
@@ -5302,7 +5713,8 @@
       ) {
         return;
       }
-      if (global.__NEU_CONTEXT_MENU_BOUND_V9__) return;
+      if (global.__NEU_CONTEXT_MENU_BOUND_VERSION__ === BRIDGE_VERSION) return;
+      global.__NEU_CONTEXT_MENU_BOUND_VERSION__ = BRIDGE_VERSION;
       global.__NEU_CONTEXT_MENU_BOUND_V9__ = true;
       global.__NEU_CONTEXT_MENU_BOUND_V8__ = true;
 
@@ -5311,7 +5723,14 @@
         if (existing) existing.remove();
       };
 
-      window.addEventListener('contextmenu', (e) => {
+      if (typeof global.__NEU_CONTEXT_MENU_HANDLER_FN__ === 'function') {
+        try {
+          window.removeEventListener('contextmenu', global.__NEU_CONTEXT_MENU_HANDLER_FN__);
+        } catch (_) {}
+      }
+
+      const contextMenuHandler = (e) => {
+        const activeBridge = global.__storageBridge || this;
         if (e.shiftKey) {
           closeMenu();
           return;
@@ -5322,8 +5741,8 @@
 
         if (!document.body) return;
 
-        const stats = this.getStats();
-        const isUnsaved = this.hasUnsavedChanges();
+        const stats = activeBridge.getStats();
+        const isUnsaved = activeBridge.hasUnsavedChanges();
         const menu = document.createElement('div');
         menu.id = '__neu-custom-context-menu';
         menu.style.cssText = [
@@ -5360,7 +5779,7 @@
             sub: '게임 파일 변경 · 세이브 관리',
             accent: '#60a5fa',
             onClick: async () => {
-              await this.goToLauncherSettings();
+              await activeBridge.goToLauncherSettings();
             },
           },
           {
@@ -5371,7 +5790,7 @@
               if (typeof window.__onLauncherOpenExtractor === 'function') {
                 await window.__onLauncherOpenExtractor();
               } else {
-                await this.openExtractorInExternalBrowser();
+                await activeBridge.openExtractorInExternalBrowser();
               }
             },
           },
@@ -5382,9 +5801,13 @@
             sub: '보관해 둔 세이브·모드 데이터 복원',
             onClick: async () => {
               try {
-                const res = await this.pickAndImportBackupFile();
-                if (!res.cancelled) {
-                  window.location.reload();
+                const res = await activeBridge.pickAndImportBackupFile();
+                if (res && !res.cancelled) {
+                  if (typeof window.__onLauncherBackupImported === 'function') {
+                    window.__onLauncherBackupImported(res);
+                  } else {
+                    window.location.reload();
+                  }
                 }
               } catch (err) {
                 console.error('[NeutralinoStorageBridge] 백업 불러오기 오류:', err);
@@ -5397,7 +5820,7 @@
             sub: '현재 진행 상황을 백업 파일로 따로 보관',
             onClick: async () => {
               try {
-                await this.exportBackupFileWithPicker();
+                await activeBridge.exportBackupFileWithPicker();
               } catch (err) {
                 console.error('[NeutralinoStorageBridge] 백업 내보내기 오류:', err);
               }
@@ -5410,18 +5833,18 @@
             sub: '진행 내용을 저장한 뒤 화면 다시 불러오기',
             onClick: async () => {
               const t0 = Date.now();
-              this.showSavingBackdrop(
+              activeBridge.showSavingBackdrop(
                 '세이브 데이터 저장 및 확인 중...',
                 '진행 내용을 안전하게 저장한 뒤 화면을 다시 불러옵니다.',
                 { mode: 'loading', badgeText: '세이브 보호 작동 중' }
               );
-              await this.waitForBackdropPaint(70);
-              await this.flushAll({ checkpoint: true });
+              await activeBridge.waitForBackdropPaint(70);
+              await activeBridge.flushAll({ checkpoint: true });
               const elapsed = Date.now() - t0;
               if (elapsed < 450) {
                 await new Promise((r) => setTimeout(r, 450 - elapsed));
               }
-              this.saveSnapshotToWindowName();
+              activeBridge.saveSnapshotToWindowName();
               window.location.reload();
             },
           },
@@ -5434,7 +5857,7 @@
               if (typeof window.__onLauncherSafeExit === 'function') {
                 await window.__onLauncherSafeExit();
               } else {
-                await this.safeExitApplication();
+                await activeBridge.safeExitApplication();
               }
             },
           },
@@ -5500,7 +5923,10 @@
         const posY = Math.max(8, Math.min(e.clientY, maxY));
         menu.style.left = `${posX}px`;
         menu.style.top = `${posY}px`;
-      });
+      };
+
+      global.__NEU_CONTEXT_MENU_HANDLER_FN__ = contextMenuHandler;
+      window.addEventListener('contextmenu', contextMenuHandler);
 
       window.addEventListener('click', closeMenu);
       window.addEventListener('scroll', closeMenu, true);
@@ -6351,6 +6777,25 @@
     try {
       ensureNeutralinoEnvironment();
       const autoBridge = new NeutralinoStorageBridge();
+      if (previousBridge && previousBridge !== autoBridge) {
+        const methodsToUpgrade = [
+          'showSavingBackdrop',
+          'waitForBackdropPaint',
+          'hideSavingBackdrop',
+          'showActionToast',
+          'exportBackupFileWithPicker',
+          'pickAndImportBackupFile',
+          'importRawBackupText',
+          'pickGameHtmlFile',
+          'goToLauncherSettings',
+          'safeExitApplication',
+        ];
+        for (const mName of methodsToUpgrade) {
+          if (typeof autoBridge[mName] === 'function') {
+            previousBridge[mName] = autoBridge[mName].bind(autoBridge);
+          }
+        }
+      }
       global.__storageBridge = autoBridge;
 
       const pathname = (window.location && window.location.pathname) || '';
