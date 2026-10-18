@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Wayward Tavern — 인터넷 창 세이브 백업 도구</title>
+  <title>Wayward Tavern — 인터넷 창 세이브 백업 · 복원 도구</title>
+  <script src="browser-storage-restore.js?v=3"></script>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -37,10 +38,10 @@
           <span>세이브 · 모드 설정 이전 도구</span>
         </div>
         <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight">
-          인터넷 창 세이브 · 모드 백업 도구
+          인터넷 창 세이브 · 모드 백업 · 복원 도구
         </h1>
         <p class="text-sm text-slate-400">
-          기존 인터넷 창(크롬·엣지 등)에 저장된 게임 진행 데이터와 모드 설정을 런처에서 바로 불러올 수 있는 백업 파일로 내려받습니다.
+          인터넷 창(크롬·엣지 등)의 세이브와 모드 설정을 백업하거나, 실행기에서 내보낸 백업을 브라우저 게임으로 복원합니다.
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2 shrink-0">
@@ -129,25 +130,46 @@
       <pre id="oneliner-code" class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-emerald-300 overflow-x-auto custom-scrollbar select-all">(() =&gt; { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(localStorage, null, 2)], {type: 'application/json'})); a.download = 'localstorage-backup.json'; a.click(); })()</pre>
     </section>
 
-    <!-- 2. 찾은 세이브 및 모드 설정 목록 -->
+    <!-- 실행기 백업을 브라우저 게임으로 복원 -->
+    <section class="bg-slate-900 border border-emerald-500/30 rounded-2xl p-5 sm:p-6 space-y-3">
+      <h2 class="text-base sm:text-lg font-bold text-white">2. 실행기 세이브를 인터넷 창으로 가져가기</h2>
+      <ol class="list-decimal pl-5 space-y-1 text-xs sm:text-sm text-slate-300">
+        <li>런처의 <b>현재 세이브 백업 저장</b>으로 JSON 파일을 내보냅니다.</li>
+        <li>게임을 플레이하던 브라우저에서 이 도구를 엽니다. 게임 탭은 닫고, 기존 세이브도 먼저 백업해 두세요.</li>
+        <li><b>복원할 백업 파일 열기</b>로 JSON 파일을 선택하고, 아래 목록에서 복원할 항목을 체크합니다.</li>
+        <li><b>선택한 항목을 로컬 저장소에 복원</b>을 누릅니다. 완료 후 원래 게임을 다시 여세요.</li>
+      </ol>
+      <div class="flex flex-wrap items-center gap-2.5">
+        <label for="file-upload-input" class="cursor-pointer px-4 py-3 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">📂 복원할 백업 파일 열기</label>
+        <button id="btn-restore-storage" type="button" disabled class="px-4 py-3 rounded-xl text-sm font-bold bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white transition">↩ 선택한 항목을 로컬 저장소에 복원</button>
+      </div>
+      <div id="restore-result" hidden role="status" aria-live="polite" class="whitespace-pre-line rounded-xl border px-4 py-3 text-sm"></div>
+      <p id="restore-source" class="text-xs text-emerald-300" role="status">복원할 JSON 백업 파일을 먼저 열어 주세요.</p>
+      <p class="text-xs text-slate-400">현재 브라우저의 로컬 저장소에 선택한 항목만 덮어씁니다. 용량 제한으로 실패하면 변경한 값을 되돌립니다.</p>
+      <details class="text-xs text-slate-400 space-y-2">
+        <summary class="cursor-pointer">게임에서 복원한 세이브가 보이지 않을 때</summary>
+        <p>브라우저 설정에 따라 이 도구와 게임의 저장 공간이 분리될 수 있습니다. 이때는 원래 게임의 타이틀 화면에서 <b>F12 → 콘솔(Console)</b>을 열고 아래 명령어를 붙여넣은 뒤 Enter를 누르세요. 표시되는 복원 창에서 JSON 파일을 선택하면 됩니다.</p>
+        <button id="btn-copy-restore-command" type="button" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">📋 게임 탭 복원 명령어 복사</button>
+      </details>
+    </section>
+
+    <!-- 3. 찾은 세이브 및 모드 설정 목록 -->
     <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div class="space-y-0.5">
-          <h2 class="text-base sm:text-lg font-bold text-white">2. 찾은 세이브 · 모드 설정 목록</h2>
-          <p class="text-xs text-slate-400">체크를 해제한 항목은 백업 파일에서 제외됩니다.</p>
+          <h2 class="text-base sm:text-lg font-bold text-white">3. 찾은 세이브 · 모드 설정 목록</h2>
+          <p class="text-xs text-slate-400">체크한 항목만 백업하거나 복원합니다.</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <input id="input-search" type="text" placeholder="항목 이름 검색..." class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-blue-500" />
+          <input id="input-search" type="text" placeholder="데이터 키(Key) 검색..." class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-blue-500" />
           <select id="select-category" class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
-            <option value="all">모든 종류</option>
-            <option value="save">본편 세이브</option>
-            <option value="cache">캐릭터 외형 / 이미지</option>
-            <option value="mod">게임 / 모드 설정</option>
-            <option value="ui">창 위치 / 화면 배치</option>
+            <option value="all">모든 크기</option>
+            <option value="large">32KB 이상 (대용량 세이브)</option>
+            <option value="inline">32KB 미만 (일반 저장)</option>
           </select>
           <button id="btn-select-all" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300">전체 선택</button>
-          <button id="btn-deselect-ui" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300">창 위치만 선택 해제</button>
+          <button id="btn-deselect-ui" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300">전체 선택 해제</button>
         </div>
       </div>
 
@@ -156,8 +178,7 @@
           <thead class="bg-slate-950 text-slate-400 sticky top-0 z-10 border-b border-slate-800">
             <tr>
               <th class="py-2.5 px-3 w-10 text-center">포함</th>
-              <th class="py-2.5 px-3">항목 이름</th>
-              <th class="py-2.5 px-3">종류</th>
+              <th class="py-2.5 px-3">데이터 키 (Key)</th>
               <th class="py-2.5 px-3">저장 방식</th>
               <th class="py-2.5 px-3 text-right">크기</th>
             </tr>
@@ -177,10 +198,13 @@
       const LARGE_ITEM_THRESHOLD = 32 * 1024; // 32KB 이상 대용량 데이터
 
       // 상태 관리
-      let rawEntries = {}; // key -> string value
+      let rawEntries = Object.create(null); // key -> string value
       let selectedKeys = new Set();
       let searchQuery = '';
       let categoryFilter = 'all';
+      let loadedBackup = false;
+      let backupLabel = '';
+      let restoring = false;
 
       // DOM 요소
       const statTotalKeys = document.getElementById('stat-total-keys');
@@ -212,41 +236,9 @@
         statusBannerText.textContent = message;
       }
 
-      function classifyKey(key) {
-        if (key === 'tavern-game') {
-          return {
-            id: 'save',
-            label: '본편 세이브',
-            badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-          };
-        }
-        if (key.includes('image-variants')) {
-          return {
-            id: 'cache',
-            label: '캐릭터 외형 / 이미지',
-            badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-          };
-        }
-        if (
-          key.startsWith('wml.win.') ||
-          key.endsWith('-layout-v1') ||
-          key.endsWith('-windows-v1') ||
-          key.endsWith('-sections-v1') ||
-          key === 'wml.dock' ||
-          key === 'wayward-addon-dock-pos-v1' ||
-          key === 'ww.window.framework.layout.v1'
-        ) {
-          return {
-            id: 'ui',
-            label: '창 위치 / 화면 배치',
-            badgeClass: 'bg-slate-700/60 text-slate-300 border-slate-600',
-          };
-        }
-        return {
-          id: 'mod',
-          label: '게임 / 모드 설정',
-          badgeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-        };
+      function isLargeKeyItem(key) {
+        const val = rawEntries[key] || '';
+        return val.length >= LARGE_ITEM_THRESHOLD;
       }
 
       function formatSize(chars) {
@@ -260,7 +252,7 @@
       }
 
       function scanBrowserStorage() {
-        const result = {};
+        const result = Object.create(null);
         try {
           const storage = window.localStorage;
           if (storage && storage.length > 0) {
@@ -280,8 +272,10 @@
         loadEntriesObject(result, '현재 인터넷 창');
       }
 
-      function loadEntriesObject(obj, sourceLabel) {
-        rawEntries = {};
+      function loadEntriesObject(obj, sourceLabel, fromBackup = false) {
+        rawEntries = Object.create(null);
+        loadedBackup = fromBackup;
+        backupLabel = fromBackup ? sourceLabel : '';
         selectedKeys.clear();
         for (const [k, v] of Object.entries(obj)) {
           rawEntries[k] = typeof v === 'string' ? v : JSON.stringify(v);
@@ -295,7 +289,7 @@
       }
 
       function buildExportObject() {
-        const out = {};
+        const out = Object.create(null);
         for (const [k, v] of Object.entries(rawEntries)) {
           if (!selectedKeys.has(k)) continue;
           out[k] = v;
@@ -331,26 +325,30 @@
         statAllKeysSub.textContent = `/ 전체 ${allKeys.length}개`;
         statTotalSize.textContent = formatSize(finalSelectedChars);
         statSplitInfo.textContent = `대용량 ${largeCount}개 · 일반 ${smallCount}개`;
+        document.getElementById('btn-restore-storage').disabled = restoring || !loadedBackup || selectedCount === 0;
+        document.getElementById('restore-source').textContent = loadedBackup
+          ? `${backupLabel} · 복원할 항목 ${selectedCount}개 선택됨`
+          : '복원할 JSON 백업 파일을 먼저 열어 주세요.';
 
         // 목록 렌더링
         keysTableBody.innerHTML = '';
 
         const filtered = allKeys.filter((k) => {
-          const cat = classifyKey(k);
-          if (categoryFilter !== 'all' && cat.id !== categoryFilter) return false;
+          const isLarge = isLargeKeyItem(k);
+          if (categoryFilter === 'large' && !isLarge) return false;
+          if (categoryFilter === 'inline' && isLarge) return false;
           if (searchQuery && !k.toLowerCase().includes(searchQuery.toLowerCase())) return false;
           return true;
         });
 
         if (filtered.length === 0) {
           const tr = document.createElement('tr');
-          tr.innerHTML = `<td colspan="5" class="py-8 text-center text-slate-400">현재 화면에서 찾은 세이브 데이터가 없습니다. 상단의 '현재 인터넷 창 다시 찾기' 또는 '보관 중인 백업 파일 열기'를 이용해 주세요.</td>`;
+          tr.innerHTML = `<td colspan="4" class="py-8 text-center text-slate-400">현재 화면에서 찾은 데이터가 없습니다. 상단의 '현재 인터넷 창 다시 찾기' 또는 '보관 중인 백업 파일 열기'를 이용해 주세요.</td>`;
           keysTableBody.appendChild(tr);
           return;
         }
 
         for (const k of filtered) {
-          const cat = classifyKey(k);
           const len = rawEntries[k].length;
           const isLarge = len >= LARGE_ITEM_THRESHOLD;
           const isChecked = selectedKeys.has(k);
@@ -378,15 +376,11 @@
           tdKey.className = 'py-2.5 px-3 font-mono text-xs text-slate-200 break-all';
           tdKey.textContent = k;
 
-          const tdCat = document.createElement('td');
-          tdCat.className = 'py-2.5 px-3';
-          tdCat.innerHTML = `<span class="inline-block px-2 py-0.5 rounded-md text-xs font-medium border ${cat.badgeClass}">${cat.label}</span>`;
-
           const tdMode = document.createElement('td');
           tdMode.className = 'py-2.5 px-3 text-xs';
           tdMode.innerHTML = isLarge
-            ? '<span class="text-amber-300 font-semibold">대용량 데이터 (빠른 부분 저장)</span>'
-            : '<span class="text-slate-400">일반 설정 데이터</span>';
+            ? '<span class="text-amber-300 font-semibold">32KB↑ 대용량 원문 저장</span>'
+            : '<span class="text-slate-400">일반 저장</span>';
 
           const tdSize = document.createElement('td');
           tdSize.className = 'py-2.5 px-3 text-right font-mono text-xs text-slate-300';
@@ -394,7 +388,6 @@
 
           tr.appendChild(tdCheck);
           tr.appendChild(tdKey);
-          tr.appendChild(tdCat);
           tr.appendChild(tdMode);
           tr.appendChild(tdSize);
           keysTableBody.appendChild(tr);
@@ -487,9 +480,25 @@
         setTimeout(() => { try { el.remove(); } catch (_) {} }, 200);
       }
 
+      function showRestoreResult(message, mode = 'success') {
+        const result = document.getElementById('restore-result');
+        const colors = mode === 'error'
+          ? 'bg-rose-950/60 border-rose-500/40 text-rose-200'
+          : mode === 'cancelled'
+          ? 'bg-slate-800 border-slate-700 text-slate-200'
+          : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200';
+        result.className = 'whitespace-pre-line rounded-xl border px-4 py-3 text-sm ' + colors;
+        result.textContent = message;
+        result.hidden = false;
+      }
+
       document.getElementById('file-upload-input').addEventListener('change', async (e) => {
         const file = e.target.files && e.target.files[0];
         if (!file) return;
+        document.getElementById('restore-result').hidden = true;
+        document.getElementById('restore-result').textContent = '';
+        loadedBackup = false;
+        renderAll();
         const t0 = Date.now();
         showExtractorBackdrop(
           '백업 파일 읽어오는 중...',
@@ -500,11 +509,9 @@
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 60)));
         try {
           const text = await file.text();
-          const parsed = JSON.parse(text.replace(/^\uFEFF/, '').trim());
-          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-            throw new Error('올바른 세이브 백업 파일 형식이 아닙니다.');
-          }
-          loadEntriesObject(parsed, `파일(${file.name})`);
+          if (!window.BrowserStorageRestore) throw new Error('browser-storage-restore.js 파일을 읽지 못했습니다.');
+          const parsed = window.BrowserStorageRestore.parseBackup(text);
+          loadEntriesObject(parsed, `파일(${file.name})`, true);
           const elapsed = Date.now() - t0;
           if (elapsed < 400) await new Promise((r) => setTimeout(r, 400 - elapsed));
           showExtractorBackdrop(
@@ -540,11 +547,7 @@
       });
 
       document.getElementById('btn-deselect-ui').addEventListener('click', () => {
-        for (const k of Object.keys(rawEntries)) {
-          if (classifyKey(k).id === 'ui') {
-            selectedKeys.delete(k);
-          }
-        }
+        selectedKeys.clear();
         renderAll();
       });
 
@@ -652,6 +655,61 @@
           code,
           '비상용 자동 백업 명령어가 복사되었습니다! 게임이 열려 있는 인터넷 창에서 F12 -> 콘솔(Console)에 붙여넣고 Enter를 누르세요.'
         );
+      });
+
+      document.getElementById('btn-copy-restore-command').addEventListener('click', () => {
+        if (!window.BrowserStorageRestore) {
+          const message = '복원 도구를 읽지 못했습니다. browser-storage-restore.js 파일이 같은 폴더에 있는지 확인해 주세요.';
+          showRestoreResult(message, 'error');
+          showToast(message, true);
+          return;
+        }
+        copyTextToClipboard(window.BrowserStorageRestore.consoleCommand(),
+          '복원 명령어를 복사했습니다. 원본 게임 탭의 F12 → 콘솔에서 실행한 뒤, 복원 창에서 JSON 백업 파일을 선택하세요.');
+      });
+
+      document.getElementById('btn-restore-storage').addEventListener('click', async () => {
+        if (restoring || !loadedBackup || !selectedKeys.size) return;
+        if (!window.BrowserStorageRestore) {
+          const message = '복원 도구를 읽지 못했습니다. browser-storage-restore.js 파일이 같은 폴더에 있는지 확인해 주세요.';
+          showRestoreResult(message, 'error');
+          showToast(message, true);
+          return;
+        }
+        if (window.__storageBridge || window.NL_APPID) {
+          const message = '실행기의 「인터넷 창으로 백업 도구 열기」로 브라우저에서 이 도구를 열어 주세요.';
+          showRestoreResult(message, 'error');
+          showToast(message, true);
+          return;
+        }
+        const values = buildExportObject();
+        const count = Object.keys(values).length;
+        if (!window.confirm(`선택한 ${count}개 항목을 현재 브라우저의 로컬 저장소에 복원할까요? 같은 항목의 기존 값은 덮어씁니다. 게임 탭을 닫았는지 확인해 주세요.`)) {
+          showRestoreResult('복원을 취소했습니다. 로컬 저장소는 변경하지 않았습니다.', 'cancelled');
+          return;
+        }
+        restoring = true;
+        renderAll();
+        let storage;
+        showExtractorBackdrop('로컬 저장소에 복원하는 중…', '선택한 항목을 저장하고 다시 읽어 확인합니다.', 'loading', '세이브 복원 중');
+        try {
+          await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 30)));
+          storage = window.BrowserStorageRestore.nativeStorageAccess();
+          const result = window.BrowserStorageRestore.restoreEntries(storage, values);
+          showRestoreResult(`${result.count}개 항목 복원·검증 완료\n변경: ${result.changed}개 · 기존 값과 동일: ${result.count - result.changed}개\n원래 게임을 다시 여세요.`);
+          showExtractorBackdrop('로컬 저장소 복원 완료', `${result.count}개 항목을 저장하고 다시 읽어 확인했습니다. 원래 게임을 다시 여세요.`, 'success', '복원 완료 ✓');
+          showToast(`${result.count}개 항목을 현재 브라우저의 로컬 저장소에 복원했습니다. 원래 게임을 다시 여세요.`, false);
+          await new Promise(resolve => setTimeout(resolve, 450));
+        } catch (error) {
+          const message = error.message || String(error);
+          showRestoreResult('복원 실패\n' + message, 'error');
+          showToast(message, true);
+        } finally {
+          if (storage) storage.dispose();
+          restoring = false;
+          renderAll();
+          hideExtractorBackdrop();
+        }
       });
 
       // 첫 실행 시 자동 찾기

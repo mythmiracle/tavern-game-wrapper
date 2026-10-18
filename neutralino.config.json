@@ -1,8 +1,12 @@
 {
   "applicationId": "wayward.tavern.wrapper",
-  "version": "0.12.0",
+  "version": "0.9.0",
   "defaultMode": "window",
   "port": 49284,
+  "logging": {
+    "enabled": true,
+    "writeToLogFile": false
+  },
   "documentRoot": "/",
   "url": "/launcher.html",
   "enableServer": true,
@@ -32,7 +36,8 @@
       "injectScript": "/neutralino-storage-bridge.js",
       "enableInspector": true,
       "openInspectorOnStartup": false,
-      "icon": "/icon.png"
+      "icon": "/icon.png",
+      "singleInstance": true
     }
   },
   "cli": {
